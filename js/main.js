@@ -119,9 +119,24 @@
     telefono: form.querySelector("#telefono"),
     ruolo: form.querySelector("#ruolo"),
     privacy: form.querySelector("#privacy"),
+    cartaceo: form.querySelector("#cartaceo"),
+    indirizzo: form.querySelector("#indirizzo"),
+    cap: form.querySelector("#cap"),
+    citta: form.querySelector("#citta"),
+    provincia: form.querySelector("#provincia"),
   };
 
+  const addressBox = form.querySelector("#indirizzo-spedizione");
+  const addressFields = [fields.indirizzo, fields.cap, fields.citta, fields.provincia];
+
   const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+  /* Copia cartacea: i campi dell'indirizzo compaiono (e sono obbligatori) solo se la casella è spuntata */
+  const syncAddress = () => {
+    const wantsPaper = fields.cartaceo.checked;
+    addressBox.hidden = !wantsPaper;
+    if (!wantsPaper) addressFields.forEach((el) => setInvalid(el, false));
+  };
 
   const setInvalid = (el, invalid, message) => {
     const group = el.closest(".form-group") || el.closest(".form-check");
@@ -164,6 +179,36 @@
       setInvalid(fields.ruolo, false);
     }
 
+    if (fields.cartaceo.checked) {
+      if (fields.indirizzo.value.trim().length < 3) {
+        setInvalid(fields.indirizzo, true, "Inserisci l'indirizzo di spedizione.");
+        ok = false;
+      } else {
+        setInvalid(fields.indirizzo, false);
+      }
+
+      if (!/^\d{5}$/.test(fields.cap.value.trim())) {
+        setInvalid(fields.cap, true, "Inserisci un CAP di 5 cifre.");
+        ok = false;
+      } else {
+        setInvalid(fields.cap, false);
+      }
+
+      if (fields.citta.value.trim().length < 2) {
+        setInvalid(fields.citta, true, "Inserisci la città.");
+        ok = false;
+      } else {
+        setInvalid(fields.citta, false);
+      }
+
+      if (fields.provincia.value.trim().length < 2) {
+        setInvalid(fields.provincia, true, "Inserisci la provincia.");
+        ok = false;
+      } else {
+        setInvalid(fields.provincia, false);
+      }
+    }
+
     if (!fields.privacy.checked) {
       setInvalid(fields.privacy, true, "Il consenso privacy è obbligatorio.");
       ok = false;
@@ -182,6 +227,9 @@
     });
   });
 
+  fields.cartaceo.addEventListener("change", syncAddress);
+  syncAddress();
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!validate()) {
@@ -196,16 +244,33 @@
       submitBtn.textContent = "Invio in corso…";
     }
 
+    // Per il tracciamento: professionista vs privato, PDF vs cartaceo.
+    // "altro" resta a parte perché non è classificabile.
+    const ruolo = fields.ruolo.value;
+    const tipo = ruolo === "privato" ? "privato" : ruolo === "altro" ? "altro" : "professionista";
+    const wantsPaper = fields.cartaceo.checked;
+    const formato = wantsPaper ? "pdf+cartaceo" : "pdf";
+
     // Placeholder: collega qui il tuo endpoint (Apps Script, CRM, Formspree, ecc.)
     const payload = {
       nome: fields.nome.value.trim(),
       email: fields.email.value.trim(),
       telefono: fields.telefono.value.trim(),
-      ruolo: fields.ruolo.value,
+      ruolo,
+      tipo,
+      formato,
+      copia_cartacea: wantsPaper,
       marketing: form.querySelector("#marketing")?.checked ?? false,
       source: "landing-potere-dell-aria",
       ts: new Date().toISOString(),
     };
+
+    if (wantsPaper) {
+      payload.indirizzo = fields.indirizzo.value.trim();
+      payload.cap = fields.cap.value.trim();
+      payload.citta = fields.citta.value.trim();
+      payload.provincia = fields.provincia.value.trim();
+    }
 
     console.info("[Obivian lead]", payload);
 
@@ -217,7 +282,7 @@
         success.focus();
       }
       if (typeof fbq === "function") {
-        fbq("track", "Lead");
+        fbq("track", "Lead", { audience: tipo, formato });
       }
     }, 600);
   });
