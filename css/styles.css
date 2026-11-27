@@ -1354,6 +1354,10 @@ ol {
   color: var(--ink-muted);
 }
 
+.form-success .form-success__download {
+  margin-top: 1.5rem;
+}
+
 .lead-form.is-hidden {
   display: none;
 }
